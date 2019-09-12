@@ -1,0 +1,108 @@
+library(shiny)
+
+
+server <- function(input, output) {
+  observe({
+    set.seed(1)
+    
+    model <- glm(data = train[, c(input$checkGroup, 'Target')], 
+                 Target ~ ., 
+                 family = binomial(link = "logit"))
+    
+    #prob
+    fitted.results1 <- predict(model,
+                              newdata=subset(test,select=c(-Target)),
+                              type='response')
+    
+    fitted.results <- ifelse(fitted.results1 > 0.5,1,0)
+    accuracy <- 1- mean(fitted.results != test$Target)
+    output$accuracy <- renderText({paste('Accuracy = ', round(accuracy, 4))})
+    output$summary <- renderPrint({(summary(model))})
+    
+    #ROC AUC PLOT
+    #############################################
+    #fg <- fitted.results[test$Target == 1]
+    #bg <- fitted.results[test$Target == 0]
+    
+    output$ROC <- renderPlot({
+      
+      #roc <- roc.curve(scores.class0 = fg, scores.class1 = bg, curve = T)
+      #print (plot(roc))
+      roc_obj <- pROC::roc(as.vector(test$Target), 
+                           fitted.results1
+                           )
+      plot(roc_obj, 
+           col="red", 
+           lwd=3, 
+           main=paste(c("ROC curve", round(auc(roc_obj), 3))))
+      
+      })
+    
+    #############################################
+    
+    output$confusionMatrix <- renderDataTable({ 
+      TP <- sum(fitted.results == 1 & test$Target == 1)
+      FP <- sum(fitted.results == 0 & test$Target == 1)
+      TN <- sum(fitted.results == 0 & test$Target == 0)
+      FN <- sum(fitted.results == 1 & test$Target == 0)
+      row.names <- c("Prediction - FALSE", "Prediction - TRUE" )
+      col.names <- c("Reference - FALSE", "Reference - TRUE")
+      cbind(Outcome = row.names, as.data.frame(matrix( 
+        c(TN, FN, FP, TP) ,
+        nrow = 2, ncol = 2, dimnames = list(row.names, col.names))))
+      
+    })
+  })
+  
+  observe({
+    input_feature_x <- as.symbol(input$featureDisplay_x)
+    input_feature_y <- as.symbol(input$featureDisplay_y)
+    
+    output$distPlotA <- renderPlot({
+      
+      # plot distribution of selected feature
+      ggdistPlotA <- ggplot(ds, aes_string(x = input$featureDisplay_x, 
+                                           fill = "factor(Target)")) +
+        geom_histogram(position = "dodge", bins=20)  +
+        labs(x = input$featureDisplay_x, y = "Count") + fte_theme() + 
+        scale_fill_manual(guide = F,values=c("darkgoldenrod1", "darkorchid3")) 
+      print(ggdistPlotA)
+      
+
+    
+    output$distPlotB <- renderPlot({
+      ggdistPlotB <- ggplot(ds, aes_string(input$featureDisplay_y, fill = "factor(Target)")) + 
+        geom_histogram(position = "dodge", bins=20) +
+        labs(x = input$featureDisplay_y,
+             y = "Count") + fte_theme() + 
+        scale_fill_manual(guide = F,values=c("darkgoldenrod1", "darkorchid3")) 
+      print (ggdistPlotB)
+      
+
+    output$ScatterPlot <- renderPlot({
+      # plot selected features against one another
+      ggscatter <- ggplot(ds, aes_string(x = input$featureDisplay_x, y = input$featureDisplay_y, color = "factor(Target)")) + 
+        geom_point(size = 2.3, position = position_jitter(w = 0.1, h = 0.1)) + 
+        labs(x = input$featureDisplay_x,
+             y = input$featureDisplay_y) +
+        fte_theme() + 
+        scale_color_manual(name = "scatterplot",values=c("darkgoldenrod1", "darkorchid3")) 
+      
+      print (ggscatter)
+      
+      
+    })
+  })
+    })
+  })
+  
+}
+
+
+
+
+
+
+
+
+
